@@ -1,10 +1,16 @@
 # How to Run
-## First Download Data
+
+## First Install Dependencies
 ```sh
-python -m src.data.download_data
+uv sync
 ```
 
-## Second Process Data
+## Second Download Data
 ```sh
-python -m src.data.process_data
+uv run -m src.data.download_data
+```
+
+## Third Process Data
+```sh
+uv run -m src.data.process_data
 ```

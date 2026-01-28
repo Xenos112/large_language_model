@@ -1,4 +1,0 @@
-colorama
-datasets
-tqdm
-rustbpe
