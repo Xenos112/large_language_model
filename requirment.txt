@@ -1,3 +1,4 @@
 colorama
 datasets
 tqdm
+rustbpe
