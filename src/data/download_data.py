@@ -52,4 +52,6 @@ def download_data():
 
         logger.log(f"Saved chunk {chunk_idx + 1}/{num_chunks} to {output_file}")
 
-    logger.log(f"Download complete! Data saved to {Paths.RAW_DATA_DIR}")
+    logger.log(
+        f"Download complete! Data saved to {Paths.RAW_DATA_DIR}", level="SUCCESS"
+    )

@@ -154,7 +154,7 @@ def main():
     finally:
         stream_writter.close()
 
-    logger.log("Data preprocessing completed")
+    logger.log("Data preprocessing completed",level="SUCCESS")
 
 if __name__ == "__main__":
     main()

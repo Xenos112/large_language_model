@@ -24,7 +24,7 @@ class Logger:
             print(
                 f"{self.get_date()} {Fore.RED}{Style.BRIGHT}[ERROR]{Style.RESET_ALL}[{self.file}] {message}"
             )
-        elif level == "DEBUG":
+        elif level == "SUCCESS":
             print(
                 f"{self.get_date()} {Fore.BLUE}{Style.BRIGHT}[DEBUG]{Style.RESET_ALL}[{self.file}] {message}"
             )
