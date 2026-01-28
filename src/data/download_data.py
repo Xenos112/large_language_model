@@ -21,7 +21,7 @@ from src.utils.logger import Logger
 
 # Function to download the dataset
 def download_data():
-    logger = Logger()
+    logger = Logger(file="download_data.py")
 
     logger.log(f"Downloading data... in {Paths.RAW_DATA_DIR}")
 
