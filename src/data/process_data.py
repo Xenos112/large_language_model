@@ -5,13 +5,11 @@ What Does this code do?
     - Log the progress of the processing.
 """
 
-from codecs import utf_8_decode
 from dataclasses import field
 import hashlib
 import os
 import re
 from io import TextIOWrapper
-from turtle import st
 from typing import Optional
 
 from tqdm import tqdm
@@ -30,7 +28,7 @@ def clean_text(text: str) -> str:
         - remove white spaces
         - remove non-printed characters
     """
-    logger = Logger(file="process_data.py")
+    logger = Logger(path="process_data.clean_text")
     logger.log("Processing data...")
 
     # Remove URLs
@@ -64,7 +62,7 @@ class StreamingShardWritter:
     """
 
     def __init__(self) -> None:
-        self.logger = Logger(file="process_data.py")
+        self.logger = Logger(path="process_data.StreamingShardWritter")
         self.shard_index = 0  # index for shards
         self.current_file: Optional[TextIOWrapper] = field(default=None)  # see if we have open shard
         self.hashs_seen = set()  # list of hashes to avoid data redundency
@@ -114,7 +112,7 @@ def main():
         - The main function for preprocessing data
         - the end result is text files each with 1GB of size
     """
-    logger = Logger(file="process_data.py")
+    logger = Logger(path="process_data.main")
     logger.log("Starting data preprocessing...")
     logger.log("Getting Raw Files")
 
