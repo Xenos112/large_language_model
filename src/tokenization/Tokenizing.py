@@ -47,18 +47,11 @@ def shard_iterator() -> Iterator[str]:
 
 def save_tokenizer(tokenizer, path: str) -> None:
     """Save tokenizer state and merge rules."""
-    # Get vocabulary
-    vocab = tokenizer.get_vocab()
 
     tokenizer_state = {
         "vocab_size": tokenizer.vocab_size,
-        "vocab": vocab,
         "pattern": tokenizer.get_pattern(),
         "version": "rustbpe_v1",
-        "special_tokens": {
-            "<|endoftext|>": vocab.get("<|endoftext|>", 0),
-            "<|pad|>": vocab.get("<|pad|>", 1),
-        },
     }
 
     with open(path, "w", encoding="utf-8") as file:
