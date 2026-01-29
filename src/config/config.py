@@ -31,8 +31,12 @@ class ModelConfig:
         - vocab_size: size of the vocabulary
         - hidden_dim: dimension of the hidden state
         - epsilon: small value to prevent division by zero
+        - max_sequence_length: maximum sequence length for input sequences
+        - base: base value for positional encoding
     """
 
     vocab_size = 32000
     hidden_dim = 1024
     epsilon = 1e-8
+    max_sequence_length = 4096
+    base = 10000.0
