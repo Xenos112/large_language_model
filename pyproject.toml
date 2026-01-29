@@ -1,7 +1,7 @@
 [project]
 name = "my-own-llm"
 version = "0.1.0"
-description = "Add your description here"
+description = "OMG I FORGOT TO ADD DESCRIPTION LOL"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
