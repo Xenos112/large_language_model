@@ -29,14 +29,10 @@ class ModelConfig:
     """
     Model architecture configuration.
         - vocab_size: size of the vocabulary
-        - context_length: maximum length of input sequence
-        - embedding_dim: dimension of the token embeddings
-        - num_heads: number of attention heads
-        - num_layers: number of transformer layers
+        - hidden_dim: dimension of the hidden state
+        - epsilon: small value to prevent division by zero
     """
 
     vocab_size = 32000
-    context_length = 2048
-    embedding_dim = 768
-    num_heads = 12
-    num_layers = 12
+    hidden_dim = 1024
+    epsilon = 1e-8
