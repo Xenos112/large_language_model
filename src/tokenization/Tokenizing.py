@@ -10,7 +10,7 @@ from typing import Iterator
 import rustbpe
 
 from src.config.config import ModelConfig, Paths
-from src.utils.Logger import Logger
+from src.utils.logger import Logger
 
 
 def shard_iterator() -> Iterator[str]:

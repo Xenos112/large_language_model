@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 from src.config.config import ModelConfig
-from src.utils.Logger import Logger
+from src.utils.logger import Logger
 
 
 class RoPE(nn.Module):

@@ -4,7 +4,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 
 from src.config.config import Paths
-from src.utils.Logger import Logger
+from src.utils.logger import Logger
 
 
 def download_data(chunk_size: int = 10000, streaming: bool = False) -> None:
