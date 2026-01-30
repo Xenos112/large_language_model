@@ -23,13 +23,6 @@ class Logger:
     }
 
     def __init__(self, path: str):
-        """
-        Initialize logger.
-
-        Args:
-            path: Module path for log prefix
-            log_to_file: Optional file path to also write logs to
-        """
         self.path = path
 
     def get_timestamp(self) -> str:
