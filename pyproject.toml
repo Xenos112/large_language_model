@@ -8,7 +8,6 @@ dependencies = [
     "colorama>=0.4.6",
     "datasets>=4.5.0",
     "numpy>=2.4.1",
-    "rustbpe>=0.1.0",
     "torch>=2.10.0",
     "tqdm>=4.67.1",
 ]
