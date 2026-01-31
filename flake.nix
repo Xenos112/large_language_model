@@ -22,8 +22,6 @@
             pkgs.openssl
             pkgs.gcc
             pkgs.gnumake
-            # For torch GPU support (optional - see note below)
-            pkgs.linuxPackages.nvidia_x11
           ];
 
           shellHook = ''
@@ -32,9 +30,6 @@
             
             # Tell uv which Python to use
             export UV_PYTHON="${python}/bin/python3"
-            
-            # Set up for potential CUDA usage with torch
-            export CUDA_PATH="${pkgs.linuxPackages.nvidia_x11}"
             
             # Auto-create venv if it doesn't exist
             if [ ! -d ".venv" ]; then
