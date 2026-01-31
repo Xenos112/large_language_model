@@ -9,5 +9,6 @@ dependencies = [
     "datasets>=4.5.0",
     "numpy>=2.4.1",
     "torch>=2.10.0",
+    "tokenizers>=0.15.0",
     "tqdm>=4.67.1",
 ]

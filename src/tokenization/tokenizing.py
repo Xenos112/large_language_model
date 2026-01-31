@@ -1,247 +1,174 @@
 """
-Code for tokenizing text data using HuggingFace tokenizers library.
-Implements efficient ByteLevel BPE tokenization with streaming from processed shards.
+BPE Tokenizer that trains on processed shards from Paths.PROCESSED_DATA_DIR
+    - Saves to Paths.TOKENIZER_FILE in JSON format
 """
 
-from pathlib import Path
-from typing import Iterator, List
+import os
+import glob
+from typing import List, Optional, Union
 
-from tokenizers import Tokenizer
-from tokenizers.decoders import ByteLevel as ByteLevelDecoder
-from tokenizers.models import BPE
-from tokenizers.normalizers import NFD, Lowercase, Sequence, StripAccents
-from tokenizers.pre_tokenizers import ByteLevel
-from tokenizers.trainers import BpeTrainer
+from tokenizers import Tokenizer, models, pre_tokenizers, trainers, processors
+from tokenizers.normalizers import NFD, Lowercase, StripAccents, Sequence
 
-from src.config.config import ModelConfig, Paths
+from src.config.config import Paths, ModelConfig
 from src.utils.logger import Logger
 
 
-def shard_iterator() -> Iterator[str]:
-    """
-    Yield text lines from all processed shards.
-
-    Yields:
-        str: Individual article texts
-    """
-    logger = Logger(path="tokenizing.shard_iterator")
-    shards = sorted(Path(Paths.PROCESSED_DATA_DIR).glob("*.txt"))
-
-    if not shards:
-        logger.log("No shards found! Run process_data.py first", level="ERROR")
-        raise FileNotFoundError("No processed shards found")
-
-    logger.log(f"Found {len(shards)} shards to tokenize")
-
-    for shard in shards:
-        logger.log(f"Processing {shard.name}")
-        try:
-            with open(shard, "r", encoding="utf-8") as file:
-                # Split by double newlines to get individual articles
-                content = file.read()
-                articles = content.split("\n\n")
-
-                for line in articles:
-                    if line.strip():  # Skip empty lines
-                        yield line
-        except Exception as e:
-            logger.log(f"Error reading {shard}: {e}", level="WARNING")
-            continue
-
-
-def build_tokenizer() -> Tokenizer:
-    """
-    Build a new ByteLevel BPE tokenizer with optimized settings.
-
-    Returns:
-        Tokenizer: A configured tokenizer ready for training
-    """
-    # Define special tokens with <|...|> syntax
-    special_tokens = [
-        "<|EOS|>",
-        "<|PAD|>",
-        "<|UNK|>",
-        "<|BOS|>",
-    ]
-
-    # Create BPE model with ByteLevel encoding
-    tokenizer = Tokenizer(BPE())
-
-    # Configure normalizer: lowercase + remove accents for efficiency
-    tokenizer.normalizer = Sequence(
-        [
-            NFD(),
-            Lowercase(),
-            StripAccents(),
+class BPETokenizer:
+    def __init__(self):
+        self.logger = Logger(__name__)
+        self.tokenizer = None
+        self._ensure_directories()
+        
+    def _ensure_directories(self):
+        os.makedirs(Paths.DATA_DIR, exist_ok=True)
+        os.makedirs(Paths.RAW_DATA_DIR, exist_ok=True)
+        os.makedirs(Paths.PROCESSED_DATA_DIR, exist_ok=True)
+        
+        tokenizer_dir = os.path.dirname(Paths.TOKENIZER_FILE)
+        if tokenizer_dir:
+            os.makedirs(tokenizer_dir, exist_ok=True)
+            
+    def get_processed_shards(self) -> List[str]:
+        if not os.path.exists(Paths.PROCESSED_DATA_DIR):
+            self.logger.log(f"Processed data dir not found: {Paths.PROCESSED_DATA_DIR}", level="WARNING")
+            return []
+        
+        patterns = [
+            os.path.join(Paths.PROCESSED_DATA_DIR, "*.txt"),
+            os.path.join(Paths.PROCESSED_DATA_DIR, "*.shard"),
+            os.path.join(Paths.PROCESSED_DATA_DIR, "shard_*"),
+            os.path.join(Paths.PROCESSED_DATA_DIR, "data_*"),
         ]
-    )
-
-    # Use ByteLevel pre-tokenizer (most efficient for LLMs)
-    tokenizer.pre_tokenizer = ByteLevel()
-
-    # Configure decoder to reconstruct text from ByteLevel tokens
-    tokenizer.decoder = ByteLevelDecoder()
-
-    # Create trainer with specified vocabulary size
-    trainer = BpeTrainer(
-        vocab_size=ModelConfig.vocab_size,
-        special_tokens=special_tokens,
-        min_frequency=2,  # Ignore very rare tokens
-        show_progress=True,
-    )
-
-    # Store trainer for use in training function
-    tokenizer.trainer = trainer
-
-    return tokenizer
-
-
-def train_tokenizer(tokenizer: Tokenizer) -> None:
-    """
-    Train tokenizer on text from processed shards.
-
-    Args:
-        tokenizer: The tokenizer instance to train
-    """
-    logger = Logger(path="tokenizing.train_tokenizer")
-    logger.log(f"Training with vocab_size={ModelConfig.vocab_size}")
-
-    # Train from iterator (memory efficient - processes one line at a time)
-    tokenizer.train_from_iterator(
-        shard_iterator(),
-        trainer=tokenizer.trainer,
-    )
-
-    logger.log("Training complete!", level="SUCCESS")
-
-
-def save_tokenizer(tokenizer: Tokenizer, path: str) -> None:
-    """
-    Save tokenizer in native HuggingFace format.
-
-    Args:
-        tokenizer: The trained tokenizer to save
-        path: File path where to save the tokenizer
-    """
-    logger = Logger(path="tokenizing.save_tokenizer")
-
-    # Create parent directories if needed
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-
-    # Save in native HuggingFace JSON format
-    tokenizer.save(path)
-    logger.log(f"Tokenizer saved to {path}", level="SUCCESS")
-
-
-def load_tokenizer(path: str) -> Tokenizer:
-    """
-    Load a saved tokenizer from file.
-
-    Args:
-        path: File path to the saved tokenizer
-
-    Returns:
-        Tokenizer: The loaded tokenizer
-    """
-    logger = Logger(path="tokenizing.load_tokenizer")
-
-    if not Path(path).exists():
-        logger.log(f"Tokenizer file not found: {path}", level="ERROR")
-        raise FileNotFoundError(f"Tokenizer not found at {path}")
-
-    tokenizer = Tokenizer.from_file(path)
-    logger.log(f"Tokenizer loaded from {path}", level="SUCCESS")
-
-    return tokenizer
-
-
-def encode(tokenizer: Tokenizer, text: str) -> List[int]:
-    """
-    Encode text to token IDs.
-
-    Args:
-        tokenizer: The tokenizer to use
-        text: Text to encode
-
-    Returns:
-        List[int]: Token IDs
-    """
-    encoding = tokenizer.encode(text)
-    return encoding.ids
-
-
-def decode(tokenizer: Tokenizer, token_ids: List[int]) -> List[str]:
-    """
-    Decode token IDs to list of token strings.
-
-    Args:
-        tokenizer: The tokenizer to use
-        token_ids: List of token IDs to decode
-
-    Returns:
-        List[str]: List of token strings (e.g., ["hello", "world", "!"])
-    """
-    # Decode to text
-    text = tokenizer.decode(token_ids, skip_special_tokens=False)
-
-    # Split text into tokens while preserving token boundaries
-    # For ByteLevel tokens, we need to reconstruct based on Ġ markers
-    tokens = []
-    current_token = ""
-
-    for char in text:
-        if char == "Ġ":  # ByteLevel marker for space
-            if current_token:
-                tokens.append(current_token)
-            current_token = ""
+        
+        shards = []
+        for pattern in patterns:
+            shards.extend(glob.glob(pattern))
+        
+        shards = sorted(list(set(shards)))  # Remove duplicates, sort
+        
+        if shards:
+            self.logger.log(f"Found {len(shards)} shard(s) in {Paths.PROCESSED_DATA_DIR}", "INFO")
+            for shard in shards[:5]:
+                self.logger.log(f"  - {os.path.basename(shard)}", "DEBUG")
+            if len(shards) > 5:
+                self.logger.log(f"  ... and {len(shards) - 5} more", "DEBUG")
         else:
-            current_token += char
-
-    if current_token:
-        tokens.append(current_token)
-
-    return tokens
-
-
-def main() -> None:
-    """Train and save tokenizer on processed shards."""
-    logger = Logger(path="tokenizing.main")
-    logger.log("Starting tokenization training...")
-
-    try:
-        # Build tokenizer
-        tokenizer = build_tokenizer()
-
-        # Train tokenizer
-        train_tokenizer(tokenizer)
-
-        # Save tokenizer
-        save_path = Paths.TOKENIZER_FILE
-        save_tokenizer(tokenizer, save_path)
-
-        # Test encoding/decoding
-        test_text = "Hello, world! This is a test."
-        logger.log(f"Testing with: '{test_text}'")
-
-        # Encode
-        token_ids = encode(tokenizer, test_text)
-        logger.log(f"Encoded token IDs: {token_ids[:10]}...")
-
-        # Decode to list of strings
-        token_strings = decode(tokenizer, token_ids)
-        logger.log(
-            f"Decoded tokens: {token_strings[:5]}...",
-            level="SUCCESS",
+            self.logger.log(f"No shards found in {Paths.PROCESSED_DATA_DIR}", "WARNING")
+            
+        return shards
+    
+    def create_tokenizer(self, vocab_size: Optional[int] = None) -> Tokenizer:
+        vocab_size = vocab_size or ModelConfig.vocab_size
+        
+        tokenizer = Tokenizer(models.BPE())
+        tokenizer.normalizer = Sequence([
+            NFD(),
+            StripAccents(),
+            Lowercase()
+        ])
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        tokenizer.enable_truncation(max_length=ModelConfig.max_sequence_length)
+        
+        return tokenizer
+    
+    def train(self, files: Union[str, List[str], None] = None, vocab_size: Optional[int] = None) -> None:
+        if files is None:
+            files = self.get_processed_shards()
+            if not files:
+                raise FileNotFoundError(f"No shards found in {Paths.PROCESSED_DATA_DIR}")
+        elif isinstance(files, str):
+            files = [files]
+            
+        vocab_size = vocab_size or ModelConfig.vocab_size
+        
+        self.logger.log(f"Training on {len(files)} shard(s)...", "INFO")
+        self.logger.log(f"Target vocab: {vocab_size}, Max length: {ModelConfig.max_sequence_length}", "INFO")
+        
+        self.tokenizer = self.create_tokenizer(vocab_size)
+        
+        trainer = trainers.BpeTrainer(
+            vocab_size=vocab_size,
+            special_tokens=["<pad>", "<s>", "</s>", "<unk>", "<mask>"],
+            min_frequency=2,
+            show_progress=True
         )
+        
+        self.tokenizer.train(files, trainer)
+        
+        self.tokenizer.post_processor = processors.TemplateProcessing(
+            single="<s> $A </s>",
+            pair="<s> $A </s> $B:1 </s>:1",
+            special_tokens=[
+                ("<s>", self.tokenizer.token_to_id("<s>")),
+                ("</s>", self.tokenizer.token_to_id("</s>")),
+            ],
+        )
+        
+        self.logger.log(f"Training complete. Vocab size: {self.get_vocab_size()}", "SUCCESS")
+        
+    def save(self, path: Optional[str] = None) -> str:
+        if self.tokenizer is None:
+            raise ValueError("No tokenizer to save. Train or load first.")
+            
+        save_path = path or Paths.TOKENIZER_FILE
+        
+        # Ensure .json extension
+        if not save_path.endswith('.json'):
+            save_path += '.json'
+            
+        self.tokenizer.save(save_path)
+        
+        # Verify
+        if os.path.exists(save_path):
+            size_mb = os.path.getsize(save_path) / (1024 * 1024)
+            self.logger.log(f"Saved JSON to {save_path} ({size_mb:.2f} MB)", "SUCCESS")
+        
+        return save_path
+        
+    def load(self, path: Optional[str] = None) -> None:
+        load_path = path or Paths.TOKENIZER_FILE
+        
+        if not os.path.exists(load_path):
+            raise FileNotFoundError(f"Tokenizer not found: {load_path}")
+            
+        self.tokenizer = Tokenizer.from_file(load_path)
+        self.logger.log(f"Loaded tokenizer from {load_path}", "SUCCESS")
+        
+    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+        if self.tokenizer is None:
+            raise ValueError("Tokenizer not initialized")
+        return self.tokenizer.encode(text, add_special_tokens=add_special_tokens).ids
+    
+    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+        if self.tokenizer is None:
+            raise ValueError("Tokenizer not initialized")
+        return self.tokenizer.decode(ids, skip_special_tokens=skip_special_tokens)
+    
+    def get_vocab_size(self) -> int:
+        return self.tokenizer.get_vocab_size() if self.tokenizer else 0
+    
+    def __len__(self) -> int:
+        return self.get_vocab_size()
 
-        # Show token count
-        vocab_size = tokenizer.get_vocab_size()
-        logger.log(f"Tokenizer vocab size: {vocab_size}", level="SUCCESS")
 
-    except Exception as e:
-        logger.log(f"Tokenization failed: {e}", level="ERROR")
-        raise
+# Convenience functions
+def train_tokenizer_on_shards(vocab_size: Optional[int] = None):
+    tokenizer = BPETokenizer()
+    tokenizer.train(vocab_size=vocab_size)
+    tokenizer.save()
+    return tokenizer
+
+
+def load_tokenizer(path: Optional[str] = None):
+    tokenizer = BPETokenizer()
+    tokenizer.load(path)
+    return tokenizer
 
 
 if __name__ == "__main__":
-    main()
+    tokenizer = train_tokenizer_on_shards()
+    
+    ids = tokenizer.encode("hello world")
+    print(f"Tokenized: {ids}")
+    print(f"Decoded: {tokenizer.decode(ids)}")
